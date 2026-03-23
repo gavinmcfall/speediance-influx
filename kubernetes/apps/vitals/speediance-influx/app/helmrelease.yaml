@@ -33,7 +33,7 @@ spec:
           app:
             image:
               repository: ghcr.io/gavinmcfall/speediance-influx
-              tag: rolling
+              tag: 1.0.0@sha256:ab7f5e0850a81c169645de117c98352fd747f436c4e6fd3d3e0d910a40ec0a89
             env:
               TZ: ${TIMEZONE}
             securityContext:
