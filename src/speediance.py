@@ -130,19 +130,35 @@ class SpeedianceClient:
         return data
 
     def fetch_workouts(self) -> list[Workout]:
-        """Fetch all workout records."""
+        """Fetch all workout records.
+
+        The API only returns the most recent record without date params.
+        We pass a wide date range to get everything.
+        """
         if not self._token and not self.login():
             return []
 
-        data = self._get("/mobile/v2/report/userTrainingDataRecord")
-        if data.get("code") != 0 or not data.get("data"):
+        # Without startDate/endDate the API only returns the latest workout
+        from datetime import date, timedelta
+        end = date.today() + timedelta(days=1)
+        start = end - timedelta(days=365)
+
+        data = self._get(
+            "/mobile/v2/report/userTrainingDataRecord",
+            params={"startDate": start.isoformat(), "endDate": end.isoformat()},
+        )
+        if data.get("code") != 0:
             logger.warning("Failed to fetch workouts: %s", data.get("message"))
             return []
 
+        records = data.get("data") or []
         workouts = []
-        for r in data["data"]:
-            w = Workout.from_record(r)
-            workouts.append(w)
+        for r in records:
+            try:
+                w = Workout.from_record(r)
+                workouts.append(w)
+            except Exception:
+                logger.debug("Skipping record without required fields: %s", r.get("title", "unknown"))
 
         logger.info("Fetched %d workout records", len(workouts))
         return workouts
