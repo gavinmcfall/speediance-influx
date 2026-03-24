@@ -1,6 +1,7 @@
 """Speediance cloud API client."""
 
 import logging
+import os
 import time
 
 import requests
@@ -37,7 +38,7 @@ class SpeedianceClient:
             "User-Agent": "Dart/3.9 (dart:io)",
             "Content-Type": "application/json",
             "Timestamp": str(int(time.time() * 1000)),
-            "Timezone": time.tzname[0] if time.tzname else "GMT",
+            "Timezone": os.environ.get("TZ", "Pacific/Auckland"),
             "Utc_offset": self._utc_offset(),
             "Versioncode": "40304",
             "Accept-Language": "en",
