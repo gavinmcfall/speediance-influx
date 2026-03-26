@@ -146,7 +146,7 @@ class InfluxWriter:
                 Point("strength_1rm")
                 .tag("user", user)
                 .tag("exercise", e.exercise_name)
-                .field("rm1_weight", e.rm1_weight)
+                .field("rm1_weight", float(e.rm1_weight))
                 .field("exercise_group_id", e.exercise_group_id)
                 .field("training_part_id", e.training_part_id)
                 .time(ts, WritePrecision.S)
