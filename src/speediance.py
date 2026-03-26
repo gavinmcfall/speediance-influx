@@ -129,19 +129,14 @@ class SpeedianceClient:
 
         return data
 
-    def fetch_workouts(self) -> list[Workout]:
-        """Fetch all workout records.
-
-        The API only returns the most recent record without date params.
-        We pass a wide date range to get everything.
-        """
+    def fetch_workouts(self, days: int = 2) -> list[Workout]:
+        """Fetch workout records for the last N days (default 2 for overlap/dedup)."""
         if not self._token and not self.login():
             return []
 
-        # Without startDate/endDate the API only returns the latest workout
         from datetime import date, timedelta
         end = date.today() + timedelta(days=1)
-        start = end - timedelta(days=365)
+        start = end - timedelta(days=days)
 
         data = self._get(
             "/mobile/v2/report/userTrainingDataRecord",
@@ -160,7 +155,7 @@ class SpeedianceClient:
             except Exception:
                 logger.debug("Skipping record without required fields: %s", r.get("title", "unknown"))
 
-        logger.info("Fetched %d workout records", len(workouts))
+        logger.info("Fetched %d workout records (%d day lookback)", len(workouts), days)
         return workouts
 
     def fetch_workout_detail(self, workout: Workout) -> None:
