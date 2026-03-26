@@ -27,13 +27,14 @@ class InfluxWriter:
     def close(self):
         self._client.close()
 
-    def get_last_workout_timestamp(self) -> int:
-        """Query InfluxDB for the most recent workout timestamp (epoch seconds)."""
+    def get_last_workout_timestamp(self, user: str) -> int:
+        """Query InfluxDB for the most recent workout timestamp for a user."""
         query = f'''
             from(bucket: "{self._config.bucket}")
                 |> range(start: -365d)
                 |> filter(fn: (r) => r._measurement == "workout")
                 |> filter(fn: (r) => r._field == "duration_secs")
+                |> filter(fn: (r) => r.user == "{user}")
                 |> keep(columns: ["_time"])
                 |> sort(columns: ["_time"], desc: true)
                 |> limit(n: 1)
@@ -44,15 +45,16 @@ class InfluxWriter:
                 for record in table.records:
                     return int(record.get_time().timestamp())
         except Exception:
-            logger.exception("Failed to query last workout timestamp")
+            logger.exception("Failed to query last workout timestamp for %s", user)
         return 0
 
-    def write_workout(self, workout: Workout):
+    def write_workout(self, workout: Workout, user: str):
         """Write a workout summary point to InfluxDB."""
         ts = datetime.fromtimestamp(workout.end_timestamp, tz=timezone.utc)
 
         point = (
             Point("workout")
+            .tag("user", user)
             .tag("type", workout.workout_type or "Unknown")
             .tag("title", workout.title)
             .field("duration_secs", workout.duration_secs)
@@ -67,20 +69,20 @@ class InfluxWriter:
         )
 
         self._write_api.write(bucket=self._config.bucket, record=point)
-        logger.debug("Wrote workout: %s", workout.title)
+        logger.debug("Wrote workout for %s: %s", user, workout.title)
 
         if self._main_config.write_sets and workout.sets:
-            self._write_sets(workout)
+            self._write_sets(workout, user)
 
-    def _write_sets(self, workout: Workout):
+    def _write_sets(self, workout: Workout, user: str):
         """Write per-set data points."""
         ts_base = datetime.fromtimestamp(workout.start_timestamp, tz=timezone.utc)
         points = []
 
         for s in workout.sets:
-            # Offset each set by its index to avoid timestamp collisions
             point = (
                 Point("workout_sets")
+                .tag("user", user)
                 .tag("workout_title", workout.title)
                 .tag("exercise", s.exercise_name)
                 .tag("workout_type", workout.workout_type or "Unknown")
@@ -102,9 +104,9 @@ class InfluxWriter:
 
         if points:
             self._write_api.write(bucket=self._config.bucket, record=points)
-            logger.debug("Wrote %d set points for %s", len(points), workout.title)
+            logger.debug("Wrote %d set points for %s/%s", len(points), user, workout.title)
 
-    def write_muscles(self, muscles: list[MuscleDetail], timestamp: int):
+    def write_muscles(self, muscles: list[MuscleDetail], timestamp: int, user: str):
         """Write muscle activation detail."""
         ts = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         points = []
@@ -112,6 +114,7 @@ class InfluxWriter:
         for m in muscles:
             point = (
                 Point("workout_muscles")
+                .tag("user", user)
                 .tag("muscle_group", m.muscle_group_name)
                 .tag("muscle_group_id", m.muscle_group_config_id)
                 .field("intensity_level", m.intensity_level)
@@ -127,14 +130,13 @@ class InfluxWriter:
 
         if points:
             self._write_api.write(bucket=self._config.bucket, record=points)
-            logger.debug("Wrote %d muscle points", len(points))
+            logger.debug("Wrote %d muscle points for %s", len(points), user)
 
-    def write_1rm(self, estimates: list[StrengthEstimate]):
+    def write_1rm(self, estimates: list[StrengthEstimate], user: str):
         """Write 1RM strength estimates."""
         points = []
 
         for e in estimates:
-            # Use assessment date as timestamp
             try:
                 ts = datetime.strptime(e.assessment_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
             except ValueError:
@@ -142,6 +144,7 @@ class InfluxWriter:
 
             point = (
                 Point("strength_1rm")
+                .tag("user", user)
                 .tag("exercise", e.exercise_name)
                 .field("rm1_weight", e.rm1_weight)
                 .field("exercise_group_id", e.exercise_group_id)
@@ -152,4 +155,4 @@ class InfluxWriter:
 
         if points:
             self._write_api.write(bucket=self._config.bucket, record=points)
-            logger.debug("Wrote %d 1RM points", len(points))
+            logger.debug("Wrote %d 1RM points for %s", len(points), user)

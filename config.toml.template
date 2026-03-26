@@ -1,10 +1,18 @@
 # Speediance-influx configuration
 # Mount this file at /app/config.toml or set CONFIG_PATH env var
 
-[speediance]
+# Multiple users — each [[users]] block is a separate Speediance account
+[[users]]
+name = "Gavin"
 email = "user@example.com"
 password = "password"
 region = "Global"             # Global or EU
+
+[[users]]
+name = "Serina"
+email = "user2@example.com"
+password = "password2"
+region = "Global"
 
 [influx]
 url = "http://influxdb.vitals.svc.cluster.local:8086"

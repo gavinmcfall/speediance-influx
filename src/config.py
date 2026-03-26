@@ -13,7 +13,8 @@ CONFIG_PATH = os.environ.get("CONFIG_PATH", "/app/config.toml")
 
 
 @dataclass
-class SpeedianceConfig:
+class UserConfig:
+    name: str = ""
     email: str = ""
     password: str = ""
     region: str = "Global"  # Global, EU
@@ -38,7 +39,7 @@ class MainConfig:
 
 @dataclass
 class AppConfig:
-    speediance: SpeedianceConfig = field(default_factory=SpeedianceConfig)
+    users: list[UserConfig] = field(default_factory=list)
     influx: InfluxConfig = field(default_factory=InfluxConfig)
     main: MainConfig = field(default_factory=MainConfig)
 
@@ -54,15 +55,28 @@ def load_config(path: str | None = None) -> AppConfig:
         logger.warning("Config file not found at %s, using defaults + env", config_path)
         raw = {}
 
-    sp_raw = raw.get("speediance", {})
     influx_raw = raw.get("influx", {})
     main_raw = raw.get("main", {})
 
-    speediance = SpeedianceConfig(
-        email=os.environ.get("SPEEDIANCE_EMAIL", sp_raw.get("email", "")),
-        password=os.environ.get("SPEEDIANCE_PASSWORD", sp_raw.get("password", "")),
-        region=os.environ.get("SPEEDIANCE_REGION", sp_raw.get("region", "Global")),
-    )
+    # Multi-user: [[users]] array in TOML
+    users = []
+    for u in raw.get("users", []):
+        users.append(UserConfig(
+            name=u.get("name", u.get("email", "").split("@")[0]),
+            email=u.get("email", ""),
+            password=u.get("password", ""),
+            region=u.get("region", "Global"),
+        ))
+
+    # Backwards compat: single [speediance] section
+    if not users and "speediance" in raw:
+        sp = raw["speediance"]
+        users.append(UserConfig(
+            name=sp.get("name", sp.get("email", "").split("@")[0]),
+            email=os.environ.get("SPEEDIANCE_EMAIL", sp.get("email", "")),
+            password=os.environ.get("SPEEDIANCE_PASSWORD", sp.get("password", "")),
+            region=os.environ.get("SPEEDIANCE_REGION", sp.get("region", "Global")),
+        ))
 
     influx = InfluxConfig(
         url=os.environ.get("INFLUX_URL", influx_raw.get("url", "http://influxdb.vitals.svc.cluster.local:8086")),
@@ -79,7 +93,7 @@ def load_config(path: str | None = None) -> AppConfig:
         write_1rm=_bool(os.environ.get("WRITE_1RM", main_raw.get("write_1rm", True))),
     )
 
-    return AppConfig(speediance=speediance, influx=influx, main=main)
+    return AppConfig(users=users, influx=influx, main=main)
 
 
 def _bool(val: object) -> bool:
